@@ -69,7 +69,7 @@ with a canned explanation instead of skipping it. See `contract_reviewer/nodes/r
 | `contract_reviewer/pdf_report.py` | `render_pdf(context) -> bytes` — Jinja2 → `xhtml2pdf`, with `_sanitize_glyphs()` to avoid missing-glyph boxes for LLM-generated Unicode characters the base PDF fonts don't cover. | **Reuse as-is.** A Django view can call this directly and return `HttpResponse(pdf_bytes, content_type="application/pdf")`, or save the bytes to a `FileField`. |
 | `contract_reviewer/templates/report.md.jinja`, `report.pdf.html.jinja` | The two report templates, both consuming the exact same `report_context` dict. | **Reuse as-is.** They're plain Jinja2, not tied to the CLI. |
 | `contract_reviewer/io_utils.py` | Run IDs, UTC timestamps, safe filenames, `Reviews/`/`Reports/` default paths, and per-run JSON artifact dumps under `.runs/<run_id>/`. | **Mostly CLI-specific — replace with the ORM + Django storage in Phase 2.** The `.runs/<run_id>/*.json` artifacts (`manifest`, `draft_findings`, `verification_ledger`, `correction_log`, `model_assignments`, `final_state`) are today's stand-in for the `reviews`/`findings`/`authorities`/`finding_authorities` tables in `Contracts Database Plan.md` — see §6. `safe_filename_stem()`, `utc_timestamp()`, and `new_run_id()` are small pure functions worth keeping regardless of storage backend. |
-| `contract_reviewer/logging_setup.py` | Console logging: stage transitions + `role: provider/model/tier/effort` lines, with third-party libraries (httpx, the OpenAI/Anthropic SDKs) kept at `WARNING` so `-v` doesn't dump raw HTTP traffic. | **CLI-specific**, but trivial to replace with Django's `logging` config or structured logging to the `model_assignments`/run-history table instead of stdout. |
+| `contract_reviewer/logging_setup.py` | Console logging: stage transitions + `role: provider/model/tier/effort` lines, with third-party libraries (httpx, the OpenAI/Anthropic SDKs) kept at `WARNING` so `-v` doesn't dump raw HTTP traffic. | **`configure_logging()` itself is still CLI-only** (called by `cli.py`/`summarize_cli.py`, never by the web app). But its logger name (`logging.getLogger("contract_reviewer")`) is what every `log_stage()`/`log_warning()`/`log_model_assignment()` call writes to, and as of 2026-09-23 `webconfig/settings.py`'s `LOGGING` dict gives that exact logger name its own handler — so under the web app, the same engine-level log lines land in `logs/webreview.log` instead of going nowhere. |
 | `contract_reviewer/cli.py`, `review.py` | Argument parsing, building the initial `ReviewState`, invoking the graph, printing the result, exit codes. | **Not reused directly, but is the reference implementation** for what a Django view or Celery task's orchestration code should do: build the initial state dict, call `graph.invoke(state, config)`, read `report_status`/`output_path`/`pdf_output_path` off the result. |
 | `contract_reviewer/document_extract.py` | Dispatches to `pdf_extract`/`docx_extract`/`extract_markdown` by file extension (`SUPPORTED_EXTENSIONS`). Used by both `review.py`'s `intake_node` and `summarise.py`. | **Reuse as-is.** Same filesystem-`Path` adaptation note as `pdf_extract.py` above. |
 | `contract_reviewer/summarize.py`, `docx_report.py`, `summary_pdf_report.py`, `summarize_cli.py`, `summarise.py` | A second, separate, deliberately non-LangGraph pipeline (extract → one structured LLM call → deterministic fidelity check → render) that produces a plain-English `ContractSummary` (in `schemas.py`) via the `Contract Summary.md` (`kind: task`) skill, as either a Word document (`docx_report.py`, CLI) or a PDF (`summary_pdf_report.py`, web app — same `pdf_report.py`-style Jinja2/`xhtml2pdf` approach, sharing its `sanitize_glyphs()` helper). See `summary.md` for the design rationale — no branching/looping here, so no graph is used, unlike `review.py`. `run_summary()` takes an optional `on_stage` callback (`"extracting"`/`"summarizing"`) purely for progress reporting; the CLI ignores it. | **Already reused, not just reusable**: `webreview/tasks.py::run_summary_task` calls `run_summary(...)` then `summary_pdf_report.render_pdf(...)` exactly the way `run_review` calls `graph.stream(...)` then `pdf_report.render_pdf(...)` — this is the one piece of `ARCHITECTURE.md`'s reuse story that's now proven in both directions (CLI and web) rather than projected. `summarize_cli.py`/`summarise.py` remain CLI-only. |
@@ -118,6 +118,18 @@ is a mapping exercise, not a redesign:
 
 ## 7. What's resolved in the Django app now, and what's still open
 
+**Scope note (2026-09-23):** the Django app's risk-review UI (upload button, progress/
+report/PDF views and routes, the review background task) was removed per
+`Specifications.md` §14 — the web app now only drives `contract_reviewer.summarize`. The
+risk-review pipeline described everywhere else in this document (`graph.py`, every
+`nodes/*.py`, the module table in §3) is unaffected and unchanged; it's simply no longer
+wired into `webreview`. It remains reachable via `review.py`, and the `Review`/`Finding`/
+`Authority`/`VerificationRecord`/`RunEvent` models below are still present in
+`webreview/models.py` (dormant, not dropped) should a web review UI be rebuilt later against
+the same schema. The gaps below are numbered as they were when the review UI was live —
+they describe the engine/database-mapping concerns generally, most of which apply equally to
+a future re-added review UI, not just to the removed one.
+
 Inherited from `TECHNICAL HANDOVER.md`'s "Technical design gaps"; status after building
 `webconfig`/`webreview` per `Specifications.md`:
 
@@ -129,9 +141,13 @@ Inherited from `TECHNICAL HANDOVER.md`'s "Technical design gaps"; status after b
    proper `RunnableConfig`-based tier fix nor a `PostgresSaver` swap has been done.
 2. **Background execution — resolved, differently than first suggested here.** Not Celery —
    `django-q2` with its Django-ORM broker (`webconfig/settings.py` `Q_CLUSTER`), avoiding a
-   Redis dependency. `webreview/tasks.py::run_review` uses `graph.stream(..., stream_mode="updates")`
-   rather than a single `graph.invoke()`, specifically so the progress bar can update after
-   each node completes — a refinement on the "single blocking call" framing above.
+   Redis dependency. The now-removed `webreview/tasks.py::run_review` used
+   `graph.stream(..., stream_mode="updates")` rather than a single `graph.invoke()`,
+   specifically so the progress bar could update after each node completed — a refinement on
+   the "single blocking call" framing above, worth remembering if a review task is rebuilt.
+   The surviving `run_summary_task` doesn't need this refinement (`summarize.run_summary()`
+   is a single linear call, not a graph — see `summary.md` §2), so it just calls `run_summary()`
+   directly with an `on_stage` callback for its two progress stages.
 3. **Job/run history — resolved.** `webreview/models.py`'s `RunEvent` table (one row per
    stage transition and per `ModelAssignment`) is exactly this; see `Specifications.md` §4.
 4. **Auth and multi-tenancy — still open, deliberately deferred.** See `Specifications.md` §9.

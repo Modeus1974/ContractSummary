@@ -10,23 +10,27 @@ Markdown report (`Reviews/`) and a matching PDF (`Reports/`). This has been run 
 end-to-end against real contract text, including the full correction-cycle loop.
 
 **Phase 2 (current): a Django web app (`webconfig`/`webreview`), built per `Specifications.md`.**
-Upload a PDF/Word contract → a `django-q2` background task runs the same `contract_reviewer`
-pipeline via `graph.stream()` → a progress bar polls a status endpoint → the finished report
-renders as styled HTML with a PDF download button. Structurally verified, and one real
-end-to-end run has gone through the actual web UI: it produced a correct `Incomplete` report
-(OpenAI ran out of credits mid-run at the `classify` stage) — this was a billing issue, not a
-code defect, and confirmed the guard/Incomplete-path logic works for real under the web app,
-not just the CLI. `ARCHITECTURE.md` documents, module by module, what `contract_reviewer/`
-code was reused unchanged vs. adapted; `Specifications.md` is the feature spec this app was
-built against — **read both before making structural changes** to either the engine package
-or the Django app.
+Originally wrapped both the risk-review pipeline and the summariser; **as of 2026-09-23 the
+web app is summary-only** (see the dated entry below) — upload a PDF/Word contract → a
+`django-q2` background task runs `contract_reviewer.summarize.run_summary()` → a progress bar
+polls a status endpoint → the finished summary renders as styled HTML with a PDF download
+button. The risk-review pipeline (`graph.stream()`, the styled-report-with-PDF flow) is still
+fully intact and reachable via the CLI (`review.py`) — only its web-app wiring was removed.
+One real end-to-end review run went through the web UI before removal: it produced a correct
+`Incomplete` report (OpenAI ran out of credits mid-run at the `classify` stage) — a billing
+issue, not a code defect, and it confirmed the guard/Incomplete-path logic worked for real
+under the web app, not just the CLI. `ARCHITECTURE.md` documents, module by module, what
+`contract_reviewer/` code was reused unchanged vs. adapted; `Specifications.md` is the
+feature spec this app was originally built against — **read both before making structural
+changes** to either the engine package or the Django app, and read the dated entry below
+before assuming §§1–11 of `Specifications.md` still describe the live web app.
 
 **Current status (as of 2026-09-23):** `models.yaml` defaults to Anthropic (switched back
-from OpenAI after OpenAI's credits ran out). No real *completed* risk-review has gone through
-the web UI yet (the one real run hit `Incomplete` on OpenAI's credit exhaustion, before the
-switch back). The **summariser** has now had a real, fully successful web-UI run (see
-directly above) — that part of the app is confirmed working end-to-end with real content.
-Testing continues in the next session; nothing is mid-run or left in an inconsistent state.
+from OpenAI after OpenAI's credits ran out). The web app's risk-review UI has since been
+removed (see below), so no further review runs are expected through the web UI — `review.py`
+is still the way to run a risk review. The **summariser** has had a real, fully successful
+web-UI run (see directly above) and is now the web app's only pipeline. Testing continues in
+the next session; nothing is mid-run or left in an inconsistent state.
 
 **`summarise.py` (new, separate program): a plain-English contract summariser.** Takes a
 PDF/`.docx`/`.md` contract, runs the `Contract Skills/Contract Summary.md` skill (a `kind:
@@ -80,6 +84,38 @@ refresh an `auto_now` field on `save(update_fields=[...])` unless it's explicitl
 every progress-saving call in `tasks.py` needed `"updated_at"` added, or the whole feature
 would have silently done nothing.
 
+**(2026-09-23) Risk-review functionality removed from the web app; the web app is now
+summary-only.** Explicit user request: "I want to remove the review button and all review
+functionality. I just want the web page to perform contract summaries." Scope was the web
+app only — `review.py`, `contract_reviewer/graph.py`, and every `nodes/*.py` are untouched
+and still fully functional from the CLI. Removed: the "Start review" button (`upload.html`),
+`progress_view`/`status_view`/`report_view`/`download_pdf_view` and the now-broken
+`report.html` template that referenced them, the `reviews/...` URL routes, `run_review`/
+`_execute`/`_persist_results` and the stage-label maps in `tasks.py`, the `client_perspective`
+form field (review-only, never read by the summariser), and the now-unused
+`RUNNING_STALL_SECONDS_REVIEW` threshold in `stall.py`. `upload_view` no longer branches on
+an `action` POST field — every upload now creates a `Summary`. **Deliberately left in place,
+dormant rather than dropped**: the `Review`/`Finding`/`Authority`/`VerificationRecord`/
+`RunEvent` Django models, their DB tables (including the one real historical review row from
+before removal), and their `admin.py` registrations — no destructive migration was run, so
+re-adding a web review UI later is additive, not a rebuild. `Q_CLUSTER`'s `timeout`/`retry`
+(`webconfig/settings.py`) were also trimmed from 3600/3700 to 600/700, since the only
+remaining web pipeline (the summariser) never approaches review-length runtimes.
+
+**Same change added logging** — directly motivated by the repeated "qcluster isn't running,
+why does this look stalled" incidents documented above, which had no persistent log trail to
+diagnose from. `webconfig/settings.py` gained a `LOGGING` dict: a rotating file handler
+(`logs/webreview.log`, 5 MB × 5 backups) plus console output, wired to two logger names —
+`webreview` (new) and `contract_reviewer` (the engine's existing logger, previously only
+captured by the CLI's `logging_setup.configure_logging()`, never by the web app). It's
+additive only — it does not touch Django's own `"django"`/`"console"` handler config, so
+Django's default request logging is unaffected. `webreview/tasks.py` and `webreview/views.py`
+now log upload receipt, form-validation failures, task start, each stage transition, success,
+extraction failure, PDF-render failure, and unhandled exceptions (`logger.exception()`, full
+traceback). `logs/` is gitignored, same as `media/`/`db.sqlite3`. Verified live: an
+intentionally invalid upload produced a correctly formatted `WARNING` line in
+`logs/webreview.log`.
+
 Three distinct kinds of work happen in this repo — don't confuse them:
 
 1. **Editing the specification files** (`Workflow/SKILL.md`, `Contract Skills/*.md`, the
@@ -125,8 +161,11 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe summarise.py "<contract.pdf|.docx|.md>" [--client-role ...] [--tier balanced] [-v]
 ```
 
-The web app has no automated tests either; verify by using the upload flow at `/` and
-watching `webreview.tasks.run_review` execute in the `qcluster` process's output.
+The web app has no automated tests either; verify by using the upload flow at `/` (summary
+only — the review flow was removed 2026-09-23, see above) and watching
+`webreview.tasks.run_summary_task` execute in the `qcluster` process's output, or in
+`logs/webreview.log` (rotating file, also captures `contract_reviewer`'s own log lines —
+check this first when troubleshooting instead of just the console).
 
 **Run exactly one `runserver` and one `qcluster` at a time.** Multiple stray instances have
 accumulated in past sessions (different terminals, different Python interpreters) with no
@@ -176,8 +215,8 @@ file (Telegram, Finnhub, secret key belong to other projects on this machine).
 | `Specifications.md` | The Django web app's feature spec (upload → progress → report → PDF download) — what `webconfig`/`webreview` were built against. |
 | `TECHNICAL HANDOVER.md` | Original requirements/status document this implementation was built against. |
 | `webconfig/` | Django project settings/URLs (SQLite, `django_q` ORM broker config, media settings). |
-| `webreview/` | The Django app: `models.py` (Contract/ContractDocument/Review/Finding/Authority/VerificationRecord/RunEvent, and the separate `Summary` model for the summariser), `tasks.py` (`run_review` calls `contract_reviewer.graph`; `run_summary_task` calls `contract_reviewer.summarize`), `views.py`/`urls.py`/`templates/`. |
-| `manage.py`, `db.sqlite3`, `media/` | Django entrypoint, dev database, uploaded contracts + generated PDFs (all local-disk, gitignored). |
+| `webreview/` | The Django app. Only summary-only code paths remain in `views.py`/`urls.py`/`tasks.py` (`run_summary_task` calls `contract_reviewer.summarize`) since 2026-09-23. `models.py` still defines `Contract`/`ContractDocument`/`Summary` (live) plus `Review`/`Finding`/`Authority`/`VerificationRecord`/`RunEvent` (dormant — no views/URLs reference them, kept for the one historical review row and to make a future web review UI additive rather than a rebuild). |
+| `manage.py`, `db.sqlite3`, `media/`, `logs/` | Django entrypoint, dev database, uploaded contracts + generated PDFs, rotating app log (`logs/webreview.log`) — all local-disk, gitignored. |
 | `run_dev.py` | Starts `runserver` + `qcluster` together (recommended way to start the web app locally); see the process-hygiene notes above for the two bugs fixed while building it. |
 | `Workflow/SKILL.md` | The orchestration spec — routing, roles, model tiers, verification rules, report structure. Loaded verbatim into prompts by `contract_reviewer/skills.py`; do not paraphrase its rules into code without checking the source. |
 | `Contract Skills/*.md` | Skill files, loaded verbatim by `contract_reviewer/skills.py`. Frontmatter `kind: contract-type` (the four review skills: Sales/Purchase, Tenancy, Employment, General fallback) marks a skill the risk-review classifier can route to (`skills.load_routing_skills()`); `kind: task` (`Contract Summary.md`) marks a different job entirely, never shown to that classifier — it's driven directly by `contract_reviewer/summarize.py` instead (both `summarise.py` and the web app's "Summarise" button). Adding a new skill file to this folder without a `kind: task` frontmatter field defaults it to `contract-type` and puts it in front of the classifier. |

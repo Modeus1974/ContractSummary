@@ -1,12 +1,17 @@
 # Contract Reviewer Web App — Specification (v1, "start simple")
 
-Status: **built.** Approved and implemented as `webconfig`/`webreview`. One real end-to-end
-run has gone through the web UI (produced a correct `Incomplete` report when OpenAI's
-account ran out of credits mid-run — not a defect, the intended failure-handling behavior);
-no run has completed successfully through the web UI yet. See `CLAUDE.md`'s "Current status"
-note and `ARCHITECTURE.md` §7 for what's resolved vs. still open since this was written.
-Kept below in its original form as the record of what was approved and why — recommendations
-that were adopted are not called out separately from the ones still true by default.
+Status: **built, then narrowed.** §§1–11 below (the risk-review flow) were approved and
+implemented as `webconfig`/`webreview`, and one real end-to-end run went through the web UI
+(produced a correct `Incomplete` report when OpenAI's account ran out of credits mid-run —
+not a defect, the intended failure-handling behavior). **As of 2026-09-23, §14 supersedes
+§§1–11 for the web app**: the risk-review UI (upload's "Start review" button, the progress/
+report/PDF-download views and routes, the `tasks.py` review task) was removed from
+`webconfig`/`webreview` at the user's explicit request, leaving the web app summary-only
+(§12). §§1–11 are kept below unchanged as the historical record of what was built and why —
+they no longer describe the live web app, but the risk-review pipeline they describe
+(`contract_reviewer/graph.py` and everything under §3) is untouched and still fully
+reachable via the CLI (`review.py`). See `CLAUDE.md`'s dated 2026-09-23 entry and
+`ARCHITECTURE.md` §7 for the full picture.
 
 ## 1. Objective
 
@@ -328,3 +333,78 @@ since either can resolve on its own):
 the summary threshold, not-stale running under the review threshold, never-stalled once
 succeeded) and through a real HTTP request against the running server with a deliberately
 backdated row, confirming the JSON and the rendered page both carry the warning correctly.
+
+---
+
+## 14. Addendum: risk-review functionality removed from the web app; logging added
+
+Status: **built.** Explicit user request: *"I want to remove the review button and all
+review functionality. I just want the web page to perform contract summaries. I also
+[if] possible, come up with logging capabilities so that future troubleshooting is
+smoother."* Scope is the web app only — `review.py` and `contract_reviewer/graph.py` (and
+every `nodes/*.py`) are unaffected and still fully functional from the CLI; this section
+only changes what `webconfig`/`webreview` expose.
+
+### 14.1 What was removed
+
+- `webreview/templates/webreview/upload.html`: the "Start review" button. The page now has a
+  single "Summarise" submit button, and the `action` POST field the two buttons used to
+  distinguish is gone — every upload creates a `Summary`.
+- `webreview/views.py`: `progress_view`, `status_view`, `report_view`, `download_pdf_view`
+  (all review-specific). `upload_view` no longer branches on `request.POST.get("action")`.
+- `webreview/urls.py`: the four `reviews/<int:review_id>/...` routes.
+- `webreview/tasks.py`: `run_review`, `_execute`, `_persist_results`, and the
+  `_STAGE_LABELS`/`_STAGE_PROGRESS` maps. Only `run_summary_task`/`_execute_summary` remain.
+- `webreview/templates/webreview/report.html`: deleted outright rather than left in place —
+  with `download_pdf_view` gone, its `{% url 'webreview:download_pdf' ... %}` reference would
+  raise `NoReverseMatch` if anything ever rendered it, and nothing does anymore.
+- `webreview/forms.py`: the `client_perspective` field — it only ever fed `Review.
+  client_perspective`; the summariser never read it.
+- `webreview/stall.py`: the now-unused `RUNNING_STALL_SECONDS_REVIEW` threshold
+  (`RUNNING_STALL_SECONDS_SUMMARY` is unaffected — the summary status check is all that's
+  left calling `check_stall()`).
+
+### 14.2 What was deliberately kept
+
+- The `Review`, `Finding`, `Authority`, `VerificationRecord`, `RunEvent` Django models, their
+  DB tables, and their `admin.py` registrations. No destructive migration was run — dropping
+  them would have deleted the one real historical review row from before this change for no
+  functional benefit, and keeping them means a future web review UI is additive (new views/
+  URLs/templates against an already-correct schema), not a rebuild.
+- `Q_CLUSTER`'s `timeout`/`retry` in `webconfig/settings.py` were trimmed from `3600`/`3700`
+  to `600`/`700` — those values existed specifically because review runs (Flagship-tier +
+  Tavily, correction cycles) could legitimately take 10+ minutes; with only the summariser
+  left in the web app's task queue (normally well under a minute — see §12.4), the old
+  timeout no longer matched anything the web app actually does.
+
+### 14.3 Logging (new capability, same change)
+
+Motivated directly by the repeated real "qcluster isn't running, the progress page looks
+stalled" incidents (§13's motivation) — those were always diagnosable, but only by manually
+querying `django_q.models.OrmQ`/`Success`/`Failure` via `manage.py shell`, with no log file
+to just read. `webconfig/settings.py` gained a `LOGGING` dict (Django's `dictConfig` format,
+`disable_existing_loggers: False`):
+
+- A `RotatingFileHandler` writing to `logs/webreview.log` (5 MB × 5 backups), plus a
+  `StreamHandler` so the same lines still show up on the console.
+- Two logger entries: `webreview` (new — everything in `tasks.py`/`views.py`) and
+  `contract_reviewer` (the engine's existing `logging.getLogger("contract_reviewer")`,
+  previously only ever captured by the CLI's `logging_setup.configure_logging()` — the web
+  app never called it, so engine-level log lines from a web-triggered summary run went
+  nowhere before this change).
+- Deliberately **additive only**: neither `"django"` nor Django's own `"console"` handler
+  name is touched, so Django's default request logging and any future use of its own
+  logging config is unaffected by this change.
+
+`webreview/tasks.py` now logs: task start (with document filename), each `on_stage`
+transition, extraction failure (`WARNING`), success, PDF-render failure, and any unhandled
+exception (`logger.exception()`, full traceback). `webreview/views.py` logs: a received
+upload (contract/document IDs, file size) and form-validation failures (`WARNING`, with the
+field errors). `logs/` was added to `.gitignore`, consistent with `media/`/`db.sqlite3`.
+
+**Verified**: `manage.py check` passes; a live run of `run_dev.py` confirmed the upload page
+renders summary-only with no "Start review" button; an intentionally invalid form submission
+(no file attached) produced a correctly formatted `WARNING` line in `logs/webreview.log`
+(timestamp, level, logger name, message). A full paid summary run through the web UI (to see
+the complete task-lifecycle log sequence end-to-end) was intentionally not performed as part
+of this change, per the project's standing rule not to spend API budget without asking first.
