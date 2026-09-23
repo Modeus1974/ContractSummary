@@ -3,8 +3,10 @@
 This document describes the CLI implementation (Phase 1) and, module by module, how much of
 it carries forward unchanged into the Django web application (Phase 2, now built — see
 `Specifications.md` for its feature spec and `webconfig`/`webreview` for the actual code).
-Read this alongside the original specs, which this implementation was built to satisfy and
-does not replace:
+**The Phase 2 app is now deployed** (PythonAnywhere, 2026-09-23) — see `CLAUDE.md`'s
+"Production deployment" section for the live URL and operational details; this document's
+module-reuse analysis is unaffected by where the app runs. Read this alongside the original
+specs, which this implementation was built to satisfy and does not replace:
 
 - `TECHNICAL HANDOVER.md` — original status/requirements document.
 - `Workflow/SKILL.md` — the authoritative orchestration spec (stages, roles, release rules).

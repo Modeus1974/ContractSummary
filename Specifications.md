@@ -177,9 +177,13 @@ that's a reasonable later upgrade for push-based updates, not a requirement now.
   move to Postgres is concurrent access (multiple simultaneous reviews, or once §6's
   background worker and the Django web process are routinely hitting the DB at the same
   time under real load), not a fixed timeline.
-- **Hosting: local for now, possibly PythonAnywhere later.** Confirmed. Nothing in this spec
-  needs to change today for that, but two PythonAnywhere-specific constraints are worth
-  knowing before you commit to it, both centred on §6 (background execution):
+- **Hosting: deployed to PythonAnywhere, 2026-09-23.** The two constraints below (outbound
+  internet, Always-on tasks) were exactly right and both required a paid plan — the account
+  used is a paid Hacker-or-above plan, and the deployment is live at
+  `https://ngwaichung.pythonanywhere.com/` with a first real production summary run already
+  succeeded end-to-end. See `CLAUDE.md`'s "Production deployment (PythonAnywhere)" section
+  for the concrete paths/commands/redeploy steps; kept below as the original reasoning for
+  why a paid plan was necessary, not just a preference:
   - **Outbound internet access is restricted on PythonAnywhere's free/lower tiers** — only a
     whitelisted set of sites is reachable without a paid plan. The pipeline calls
     api.anthropic.com / api.openai.com / openrouter.ai / api.tavily.com directly, none of
@@ -190,9 +194,15 @@ that's a reasonable later upgrade for push-based updates, not a requirement now.
     feature**, which is also a paid-tier feature (their free/lower tiers only offer
     scheduled/cron-style tasks with a minimum interval, not a continuously-running worker
     process). This doesn't change the §6 recommendation — `django-q2` still applies, and
-    still avoids needing a separate Redis service — but budget for it when picking a plan.
-  - Neither point blocks anything about local development now; revisit at the point you
-    actually pick a PythonAnywhere plan, not before.
+    still avoids needing a separate Redis service. In production this runs
+    `manage.py qcluster` as an Always-on task; forgetting to set this up (or forgetting to
+    restart it after a code change to `tasks.py`) reproduces the exact "stuck at pending"
+    failure mode §13 was built to detect locally, just on the server.
+  - **One real deployment-only issue neither point anticipated**: `requirements.txt` left
+    `django` unpinned, so PythonAnywhere's `pip install` resolved the latest release (6.1.1)
+    instead of the 5.2.17 this app was actually built and tested against — an untested
+    major-version jump. Fixed by pinning `django==5.2.17`. Worth remembering for every other
+    unpinned dependency in that file if a future redeploy ever behaves differently from local.
 
 ---
 

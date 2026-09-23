@@ -116,6 +116,31 @@ traceback). `logs/` is gitignored, same as `media/`/`db.sqlite3`. Verified live:
 intentionally invalid upload produced a correctly formatted `WARNING` line in
 `logs/webreview.log`.
 
+**(2026-09-23) Deployed to PythonAnywhere — first real production run succeeded.** The
+summary-only web app is now live at `https://ngwaichung.pythonanywhere.com/` (account
+`NgWaiChung`, a paid Hacker-or-above plan — required, since the free tier's outbound-internet
+whitelist doesn't include `api.anthropic.com` and it has no Always-on tasks). Full details in
+a new **## Production deployment (PythonAnywhere)** section below; summary of what changed to
+get there:
+- `webconfig/settings.py`: `DEBUG`/`ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS` became
+  environment-driven (`DEBUG` now defaults to `False` — local dev sets `DEBUG=True` in
+  `.env`), `STATIC_ROOT` added for `collectstatic`, and `SESSION_COOKIE_SECURE`/
+  `CSRF_COOKIE_SECURE`/`SECURE_SSL_REDIRECT` are forced whenever `DEBUG` is off.
+- `requirements.txt`: `django` was unpinned, so PythonAnywhere's first install silently
+  resolved the latest **6.1.1** instead of the **5.2.17** this app is actually tested
+  against — pinned to `django==5.2.17` to guarantee dev/prod parity.
+- **Real, non-code PythonAnywhere quirk hit during setup**: a virtualenv built from
+  `/usr/bin/python3.11` produced a broken standard-library copy (`ModuleNotFoundError: No
+  module named '_posixsubprocess'`) even though bare `/usr/bin/python3.11` worked fine
+  standalone — a broken 3.11 image on that account, not anything this project did. Worked
+  around by using Python **3.12** for the production virtualenv instead; nothing in this
+  codebase actually requires exactly 3.11 (that pin was only ever about local wheel
+  availability — see Commands below).
+- First real production run: a genuine employment agreement uploaded through the live URL,
+  summarised successfully end-to-end, correctly surfacing the same blank-employee-name detail
+  the local test run found — confirming the deployed app, not just the local one, produces
+  correct output against real content.
+
 Three distinct kinds of work happen in this repo — don't confuse them:
 
 1. **Editing the specification files** (`Workflow/SKILL.md`, `Contract Skills/*.md`, the
@@ -206,6 +231,36 @@ after OpenAI's credits ran out; see "Current status" above); override per-run wi
 API keys come from `.env` (`ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`,
 `TAVILY_API_KEY`) — never log full key values, and ignore the other unrelated keys in that
 file (Telegram, Finnhub, secret key belong to other projects on this machine).
+
+## Production deployment (PythonAnywhere)
+
+**Live at `https://ngwaichung.pythonanywhere.com/`** (account `NgWaiChung`, paid Hacker-or-
+above plan — the free tier cannot run this app at all, see the dated entry above). Deployed
+2026-09-23; first real summary run against a genuine contract succeeded end-to-end.
+
+| Setting | Value |
+|---|---|
+| Project path | `/home/NgWaiChung/ContractSummary` (a `git clone` of this repo's `main` branch) |
+| Virtualenv | `/home/NgWaiChung/.virtualenvs/contractsummary`, **Python 3.12** (not 3.11 — see the dated entry above for why) |
+| Web app | Manual configuration, Python 3.12, WSGI file hand-edited to add the project path to `sys.path` and set `DJANGO_SETTINGS_MODULE=webconfig.settings` |
+| Static files mapping (Web tab) | `/static/` → `.../ContractSummary/staticfiles` (after `collectstatic`); `/media/` → `.../ContractSummary/media` |
+| Background worker | `manage.py qcluster` runs as a PythonAnywhere **Always-on task** (paid-tier feature) — command: `/home/NgWaiChung/.virtualenvs/contractsummary/bin/python /home/NgWaiChung/ContractSummary/manage.py qcluster`. **Without this, uploads sit at `pending` forever** — the exact local "qcluster isn't running" failure mode documented above, just on the server instead of a dev machine. |
+| `.env` | Created manually on the server (never committed, same as local) — needs its own `SECRET_KEY` (don't reuse the local one), `DEBUG=False`, `ALLOWED_HOSTS=ngwaichung.pythonanywhere.com`, `CSRF_TRUSTED_ORIGINS=https://ngwaichung.pythonanywhere.com`, and `ANTHROPIC_API_KEY`. |
+
+**To redeploy after a code change:**
+```bash
+# In a PythonAnywhere Bash console:
+workon contractsummary
+cd ~/ContractSummary
+git pull
+pip install -r requirements.txt          # only if requirements.txt changed
+python manage.py migrate                 # only if a new migration was added
+python manage.py collectstatic --noinput # only if static files changed
+```
+Then: **Web tab → Reload** (picks up code/settings changes for the request-serving process).
+If `webreview/tasks.py` or anything it imports changed, also restart the qcluster Always-on
+task from the **Tasks** tab — reloading the web app does **not** restart it, since it's a
+separate long-running process.
 
 ## Repository layout
 
