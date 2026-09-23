@@ -1,0 +1,81 @@
+{% extends "webreview/base.html" %}
+{% block title %}Summary: {{ summary_run.contract.title }}{% endblock %}
+{% block content %}
+<div class="report-header">
+    <h1>{{ summary_run.contract.title }}</h1>
+    {% if summary_run.summary_pdf %}
+        <a href="{% url 'webreview:summary_download_pdf' summary_run.id %}" class="btn btn-primary">Download PDF</a>
+    {% endif %}
+</div>
+<p class="subtitle">Descriptive summary, not a risk review or legal advice.</p>
+
+{% if summary_run.incomplete_reason %}
+<p class="field-error">{{ summary_run.incomplete_reason }}</p>
+{% endif %}
+
+{% with s=summary_run.summary_context.summary %}
+{% if s %}
+<article class="report-body">
+    <h2>Snapshot</h2>
+    <table>
+        <tr><th>Field</th><th>Detail</th></tr>
+        <tr><td>Contract type</td><td>{{ s.contract_type }}</td></tr>
+        <tr><td>Parties</td><td>{% for p in s.parties %}{{ p.name }} ({{ p.role }}){% if not forloop.last %}; {% endif %}{% empty %}not stated{% endfor %}</td></tr>
+        <tr><td>Effective date</td><td>{{ s.effective_date }}</td></tr>
+        <tr><td>Term / duration</td><td>{{ s.term_duration }}</td></tr>
+        <tr><td>Governing law</td><td>{{ s.governing_law }}</td></tr>
+        <tr><td>Dispute resolution</td><td>{{ s.dispute_resolution }}</td></tr>
+        <tr><td>Key monetary value</td><td>{{ s.key_monetary_value }}</td></tr>
+    </table>
+
+    <h2>Subject Matter and Purpose</h2>
+    <p>{{ s.subject_matter_summary }}</p>
+
+    <h2>Key Obligations by Party</h2>
+    {% for party_obligations in s.obligations_by_party %}
+        <h3>{{ party_obligations.party }}</h3>
+        <ul>
+            {% for item in party_obligations.obligations %}<li>{{ item }}</li>{% endfor %}
+        </ul>
+    {% endfor %}
+
+    <h2>Payment Terms</h2>
+    <p>{{ s.payment_terms }}</p>
+
+    {% if s.key_dates %}
+    <h2>Key Dates and Milestones</h2>
+    <table>
+        <tr><th>Date</th><th>Description</th></tr>
+        {% for kd in s.key_dates %}<tr><td>{{ kd.date }}</td><td>{{ kd.description }}</td></tr>{% endfor %}
+    </table>
+    {% endif %}
+
+    <h2>Termination and Exit</h2>
+    <p>{{ s.termination_and_exit }}</p>
+
+    <h2>Liability and Risk-Allocation Snapshot</h2>
+    <p>{{ s.liability_snapshot }}</p>
+
+    {% if s.ip_confidentiality_data %}
+    <h2>IP, Confidentiality and Data</h2>
+    <p>{{ s.ip_confidentiality_data }}</p>
+    {% endif %}
+
+    {% if s.notable_or_unusual_terms %}
+    <h2>Notable or Unusual Terms</h2>
+    <ul>{% for item in s.notable_or_unusual_terms %}<li>{{ item }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    {% if s.missing_information %}
+    <h2>Missing Information</h2>
+    <ul>{% for item in s.missing_information %}<li>{{ item }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    {% if summary_run.fidelity_issues %}
+    <h2>Data Fidelity Notices</h2>
+    <ul>{% for item in summary_run.fidelity_issues %}<li>{{ item }}</li>{% endfor %}</ul>
+    {% endif %}
+</article>
+{% endif %}
+{% endwith %}
+{% endblock %}

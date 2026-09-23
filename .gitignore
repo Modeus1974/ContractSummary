@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+Reviews/
+Reports/
+Summary/
+.runs/
+tests/fixtures/
+db.sqlite3
+media/
+staticfiles/
+logs/
+Sample Contract.pdf

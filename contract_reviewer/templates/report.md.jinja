@@ -1,0 +1,100 @@
+# Contract Review Report
+
+Report status: **{{ report_status }}**
+Commercial recommendation: **{{ commercial_recommendation or "not applicable — see report status" }}**
+
+## 1. Review metadata
+
+- Run ID: `{{ run_id }}`
+- Source file: `{{ source_filename }}`
+- Source SHA-256: `{{ source_sha256 }}`
+- Client role: {{ client_role or "not specified" }}
+- Client perspective: {{ client_perspective or "not specified" }}
+- Research date: {{ research_date }}
+- Selected skill(s): {% for path in selected_skill_paths %}`{{ path }}`{% if not loop.last %}, {% endif %}{% else %}none{% endfor %}
+- Classification rationale: {{ classification_rationale or "not applicable" }}
+- Correction cycles performed: {{ correction_cycle }}
+{% if incomplete_reason %}- Incomplete reason: {{ incomplete_reason }}
+{% endif -%}
+{% if missing_material %}- Missing material: {% for m in missing_material %}{{ m }}{% if not loop.last %}; {% endif %}{% endfor %}
+{% endif -%}
+
+### Model/role assignments
+
+| Role | Tier | Provider | Model | Effort |
+|---|---|---|---|---|
+{% for a in model_assignments -%}
+| {{ a.role }} | {{ a.tier }} | {{ a.provider }} | {{ a.model }} | {{ a.effort_actual }} |
+{% endfor %}
+
+## 2. Executive assessment
+
+{{ executive_paragraph or "Not available — see report status and limitations below." }}
+
+## 3. Severity-ranked risk register
+
+| Finding | Severity | Confidence | Clause | Consequence | Authority | Verification | Action |
+|---|---|---|---|---|---|---|---|
+{% for f in findings -%}
+| {{ f.finding_id }} | {{ f.severity }} | {{ f.confidence }} | {{ f.clause_reference }} | {{ f.consequence }} | {{ f.authority_ids|join(', ') }} | {{ f.verification_summary }} | {{ f.recommended_amendment }} |
+{% endfor %}
+
+## 4. Detailed findings
+
+{% for f in findings %}
+### {{ f.finding_id }} — {{ f.clause_reference }} ({{ f.severity }} / {{ f.confidence }} confidence)
+
+- Affected party: {{ f.affected_party }}
+- Evidence: {{ f.clause_text }}
+- Trigger scenario: {{ f.trigger_scenario }}
+- Consequence: {{ f.consequence }}
+- Legal proposition: {{ f.legal_proposition }}
+- Authorities: {{ f.authority_ids|join(', ') or "none" }}
+- Rating rationale: {{ f.rating_rationale }}
+- Recommended amendment: {{ f.recommended_amendment }}
+- Fallback position: {{ f.fallback_position }}
+- Residual risk: {{ f.residual_risk }}
+{% if f.missing_evidence %}- Missing evidence: {{ f.missing_evidence }}
+{% endif -%}
+{% if f.counterargument %}- Material counterargument: {{ f.counterargument }}
+{% endif %}
+{% endfor %}
+
+## 5. Actions before signing/performance
+
+{% for action in actions_before_signing -%}
+- {{ action }}
+{% else -%}
+- None recorded.
+{% endfor %}
+
+## 6. Unverified concerns and limitations
+
+{% for c in unverified_concerns -%}
+- **{{ c.finding_id }}** ({{ c.status }}): {{ c.description }}
+{% else -%}
+- None recorded.
+{% endfor %}
+
+## 7. Authority verification register
+
+| Authority | Type | Citation | Finding | Proposition | Pinpoint | Status | Caveats |
+|---|---|---|---|---|---|---|---|
+{% for row in authority_register -%}
+| {{ row.authority_id }} | {{ row.authority_type }} | {{ row.citation or row.title }} | {{ row.finding_id }} | {{ row.proposition_checked }} | {{ row.pinpoint }} | {{ row.status }} | {{ row.caveats or "" }} |
+{% endfor %}
+
+## 8. Review coverage and audit summary
+
+- Documents/issue areas considered: {% for a in documents_and_issue_areas_considered %}{{ a }}{% if not loop.last %}; {% endif %}{% else %}not recorded{% endfor %}
+
+- Areas with no material finding: {% for a in areas_with_no_material_finding %}{{ a }}{% if not loop.last %}; {% endif %}{% else %}none{% endfor %}
+
+- Skipped/unreadable parts: {% for p in scanned_pages %}page {{ p }}{% if not loop.last %}, {% endif %}{% else %}none{% endfor %}
+
+- Correction cycles: {{ correction_cycle }}
+{% for entry in correction_log -%}
+  - Cycle {{ entry.cycle }}: {{ entry.defect_description }} → {{ entry.resolution }}
+{% endfor %}
+
+- Outstanding stage failures: {% for e in errors %}{{ e.stage }}: {{ e.detail }}{% if not loop.last %}; {% endif %}{% else %}none{% endfor %}

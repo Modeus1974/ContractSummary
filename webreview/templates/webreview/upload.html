@@ -1,0 +1,22 @@
+{% extends "webreview/base.html" %}
+{% block title %}Upload a contract{% endblock %}
+{% block content %}
+<h1>Summarise a contract</h1>
+<p class="subtitle">Upload a PDF or Word (.docx) contract. This reads the document and
+produces a plain-English summary -- usually well under a minute.</p>
+
+<form method="post" enctype="multipart/form-data" class="upload-form">
+    {% csrf_token %}
+    {% for field in form %}
+        <div class="form-row">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+            {% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+        </div>
+    {% endfor %}
+    <div class="button-row">
+        <button type="submit" class="btn btn-primary">Summarise</button>
+    </div>
+</form>
+{% endblock %}

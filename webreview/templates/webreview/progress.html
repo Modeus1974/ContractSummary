@@ -1,0 +1,53 @@
+{% extends "webreview/base.html" %}
+{% block title %}{{ heading }}{% endblock %}
+{% block content %}
+<h1>{{ heading }}</h1>
+<p class="subtitle">{{ subtitle }}</p>
+
+<div class="progress-bar-track">
+    <div id="progress-bar-fill" class="progress-bar-fill" style="width: {{ progress_percent }}%;"></div>
+</div>
+<p id="stage-label" class="stage-label">{{ current_stage_label|default:"Starting..." }}</p>
+<p id="stall-warning" class="stall-warning" style="display: none;"></p>
+<p id="error-message" class="field-error" style="display: none;"></p>
+
+<script>
+const statusUrl = "{{ status_url }}";
+const reportUrl = "{{ report_url }}";
+
+async function pollStatus() {
+    try {
+        const response = await fetch(statusUrl);
+        const data = await response.json();
+
+        document.getElementById("progress-bar-fill").style.width = data.progress_percent + "%";
+        document.getElementById("stage-label").textContent = data.current_stage_label || "Starting...";
+
+        const stallEl = document.getElementById("stall-warning");
+        if (data.stalled) {
+            stallEl.textContent = "⚠ " + data.stall_reason;
+            stallEl.style.display = "block";
+        } else {
+            stallEl.style.display = "none";
+        }
+
+        if (data.execution_status === "succeeded") {
+            window.location.href = reportUrl;
+            return;
+        }
+        if (data.execution_status === "failed") {
+            const errorEl = document.getElementById("error-message");
+            errorEl.textContent = "Failed: " + (data.incomplete_reason || "unknown error");
+            errorEl.style.display = "block";
+            return;
+        }
+        // Keep polling even while stalled -- it can resolve itself (e.g. once a worker
+        // is started) and there's no separate signal to say "give up" for a stall.
+        setTimeout(pollStatus, 2500);
+    } catch (err) {
+        setTimeout(pollStatus, 5000);
+    }
+}
+pollStatus();
+</script>
+{% endblock %}

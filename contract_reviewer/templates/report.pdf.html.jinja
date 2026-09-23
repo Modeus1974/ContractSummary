@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    @page {
+        size: A4;
+        margin: 2cm 1.8cm 2.2cm 1.8cm;
+        @frame footer_frame {
+            -pdf-frame-content: footer_content;
+            left: 1.8cm; width: 17.4cm; top: 27.6cm; height: 1cm;
+        }
+    }
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 9.5pt; color: #1a1a1a; line-height: 1.45; }
+    h1 { font-size: 20pt; color: #1a2b4c; margin-bottom: 2pt; }
+    h2 { font-size: 13pt; color: #1a2b4c; border-bottom: 1pt solid #1a2b4c; padding-bottom: 3pt; margin-top: 4pt; }
+    h2.page-break { page-break-before: always; }
+    h3 { font-size: 10.5pt; color: #1a2b4c; margin: 0; }
+    .cover { text-align: center; padding-top: 6cm; }
+    .cover h1 { font-size: 26pt; }
+    .cover .subtitle { font-size: 12pt; color: #555555; margin-top: 6pt; }
+    .status-badge { padding: 4pt 14pt; color: white; font-weight: bold; font-size: 12pt; }
+    .status-completed { background-color: #2e7d32; }
+    .status-provisional { background-color: #b8860b; }
+    .status-incomplete { background-color: #b71c1c; }
+    .meta-table { margin: 24pt auto 0 auto; text-align: left; width: 80%; font-size: 9.5pt; }
+    .meta-table td { padding: 3pt 8pt; }
+    .meta-table td.label { color: #555555; width: 42%; }
+    table.data { width: 100%; margin: 6pt 0 14pt 0; font-size: 8pt; }
+    table.data th { background-color: #1a2b4c; color: white; padding: 5pt; text-align: left; }
+    table.data td { padding: 5pt; border-bottom: 0.5pt solid #cccccc; vertical-align: top; }
+    .severity { padding: 1pt 6pt; color: white; font-size: 7.5pt; font-weight: bold; }
+    .severity-critical { background-color: #b71c1c; }
+    .severity-high { background-color: #d84315; }
+    .severity-medium { background-color: #f9a825; color: #333333; }
+    .severity-low { background-color: #558b2f; }
+    .finding-block { margin-bottom: 12pt; page-break-inside: avoid; }
+    .finding-block h3 { background-color: #eef1f7; padding: 4pt 6pt; }
+    .finding-block ul { margin: 6pt 0 8pt 14pt; padding: 0; }
+    .finding-block li { margin-bottom: 3pt; }
+    ul.plain { margin: 4pt 0 10pt 14pt; padding: 0; }
+    ul.plain li { margin-bottom: 4pt; }
+    .footer { font-size: 8pt; color: #777777; text-align: center; }
+    .disclaimer { font-size: 8pt; color: #777777; margin-top: 16pt; }
+</style>
+</head>
+<body>
+
+<div id="footer_content" class="footer">
+    Contract Review Report &mdash; {{ source_filename }} &mdash; Page <pdf:pagenumber/> of <pdf:pagecount/>
+</div>
+
+<div class="cover">
+    <h1>Contract Review Report</h1>
+    <div class="subtitle">{{ source_filename }}</div>
+    <div class="subtitle">Prepared {{ research_date }}{% if client_role %} for {{ client_role }}{% endif %}</div>
+    <p><span class="status-badge status-{{ report_status|lower }}">{{ (report_status or "UNKNOWN")|upper }}</span></p>
+    <table class="meta-table">
+        <tr><td class="label">Commercial recommendation</td><td>{{ commercial_recommendation or "Not applicable" }}</td></tr>
+        <tr><td class="label">Run ID</td><td>{{ run_id }}</td></tr>
+        <tr><td class="label">Source SHA-256</td><td style="font-size:7pt;">{{ source_sha256 }}</td></tr>
+        <tr><td class="label">Selected skill(s)</td><td>{{ selected_skill_paths|join(', ') or 'none' }}</td></tr>
+        <tr><td class="label">Correction cycles performed</td><td>{{ correction_cycle }}</td></tr>
+    </table>
+    <p class="disclaimer">This report supports professional-style contract review; it is not a guarantee of professional equivalence or a certification that the contract is safe to sign. See limitations and the authority verification register before relying on any finding.</p>
+</div>
+
+<h2 class="page-break">Executive Assessment</h2>
+<p>{{ executive_paragraph or "Not available &mdash; see report status and limitations below." }}</p>
+
+<h2>Severity-Ranked Risk Register</h2>
+<table class="data">
+    <tr>
+        <th style="width:6%">ID</th><th style="width:8%">Severity</th><th style="width:8%">Conf.</th>
+        <th style="width:14%">Clause</th><th style="width:30%">Consequence</th>
+        <th style="width:9%">Authority</th><th style="width:25%">Verification</th>
+    </tr>
+    {% for f in findings %}
+    <tr>
+        <td>{{ f.finding_id }}</td>
+        <td><span class="severity severity-{{ f.severity|lower }}">{{ f.severity }}</span></td>
+        <td>{{ f.confidence }}</td>
+        <td>{{ f.clause_reference }}</td>
+        <td>{{ f.consequence }}</td>
+        <td>{{ f.authority_ids|join(', ') }}</td>
+        <td>{{ f.verification_summary }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<h2 class="page-break">Detailed Findings</h2>
+{% for f in findings %}
+<div class="finding-block">
+    <h3>{{ f.finding_id }} &mdash; {{ f.clause_reference }} &nbsp; <span class="severity severity-{{ f.severity|lower }}">{{ f.severity }}</span></h3>
+    <ul>
+        <li><strong>Affected party:</strong> {{ f.affected_party }}</li>
+        <li><strong>Evidence:</strong> {{ f.clause_text }}</li>
+        <li><strong>Trigger scenario:</strong> {{ f.trigger_scenario }}</li>
+        <li><strong>Consequence:</strong> {{ f.consequence }}</li>
+        <li><strong>Legal proposition:</strong> {{ f.legal_proposition }}</li>
+        <li><strong>Authorities:</strong> {{ f.authority_ids|join(', ') or "none" }}</li>
+        <li><strong>Rating rationale:</strong> {{ f.rating_rationale }}</li>
+        <li><strong>Recommended amendment:</strong> {{ f.recommended_amendment }}</li>
+        <li><strong>Fallback position:</strong> {{ f.fallback_position }}</li>
+        <li><strong>Residual risk:</strong> {{ f.residual_risk }}</li>
+        {% if f.missing_evidence %}<li><strong>Missing evidence:</strong> {{ f.missing_evidence }}</li>{% endif %}
+        {% if f.counterargument %}<li><strong>Material counterargument:</strong> {{ f.counterargument }}</li>{% endif %}
+    </ul>
+</div>
+{% endfor %}
+
+<h2 class="page-break">Actions Before Signing/Performance</h2>
+<ul class="plain">
+    {% for action in actions_before_signing %}<li>{{ action }}</li>{% else %}<li>None recorded.</li>{% endfor %}
+</ul>
+
+<h2>Unverified Concerns and Limitations</h2>
+<ul class="plain">
+    {% for c in unverified_concerns %}<li><strong>{{ c.finding_id }}</strong> ({{ c.status }}): {{ c.description }}</li>{% else %}<li>None recorded.</li>{% endfor %}
+</ul>
+{% if incomplete_reason %}<p><strong>Incomplete reason:</strong> {{ incomplete_reason }}</p>{% endif %}
+{% if missing_material %}
+<p><strong>Missing material:</strong></p>
+<ul class="plain">{% for m in missing_material %}<li>{{ m }}</li>{% endfor %}</ul>
+{% endif %}
+
+<h2 class="page-break">Authority Verification Register</h2>
+<table class="data">
+    <tr>
+        <th style="width:7%">Authority</th><th style="width:7%">Type</th><th style="width:15%">Citation</th>
+        <th style="width:7%">Finding</th><th style="width:40%">Proposition</th>
+        <th style="width:12%">Pinpoint</th><th style="width:12%">Status</th>
+    </tr>
+    {% for row in authority_register %}
+    <tr>
+        <td>{{ row.authority_id }}</td>
+        <td>{{ row.authority_type }}</td>
+        <td>{{ row.citation or row.title }}</td>
+        <td>{{ row.finding_id }}</td>
+        <td>{{ row.proposition_checked }}</td>
+        <td>{{ row.pinpoint }}</td>
+        <td>{{ row.status }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<h2 class="page-break">Review Coverage and Audit Summary</h2>
+<p><strong>Documents/issue areas considered:</strong> {{ documents_and_issue_areas_considered|join('; ') or 'not recorded' }}</p>
+<p><strong>Areas with no material finding:</strong> {{ areas_with_no_material_finding|join('; ') or 'none' }}</p>
+<p><strong>Skipped/unreadable parts:</strong> {% for p in scanned_pages %}page {{ p }}{% if not loop.last %}, {% endif %}{% else %}none{% endfor %}</p>
+<p><strong>Correction cycles:</strong> {{ correction_cycle }}</p>
+<ul class="plain">
+{% for entry in correction_log %}<li>Cycle {{ entry.cycle }}: {{ entry.defect_description }} -&gt; {{ entry.resolution }}</li>{% endfor %}
+</ul>
+<p><strong>Outstanding stage failures:</strong> {% for e in errors %}{{ e.stage }}: {{ e.detail }}{% if not loop.last %}; {% endif %}{% else %}none{% endfor %}</p>
+
+<h2>Model / Role Assignments</h2>
+<table class="data">
+    <tr><th>Role</th><th>Tier</th><th>Provider</th><th>Model</th><th>Effort</th></tr>
+    {% for a in model_assignments %}
+    <tr><td>{{ a.role }}</td><td>{{ a.tier }}</td><td>{{ a.provider }}</td><td>{{ a.model }}</td><td>{{ a.effort_actual }}</td></tr>
+    {% endfor %}
+</table>
+
+</body>
+</html>

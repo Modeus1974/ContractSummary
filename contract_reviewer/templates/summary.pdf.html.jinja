@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    @page {
+        size: A4;
+        margin: 2cm 1.8cm 2.2cm 1.8cm;
+        @frame footer_frame {
+            -pdf-frame-content: footer_content;
+            left: 1.8cm; width: 17.4cm; top: 27.6cm; height: 1cm;
+        }
+    }
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 9.5pt; color: #1a1a1a; line-height: 1.45; }
+    h1 { font-size: 20pt; color: #1a2b4c; margin-bottom: 2pt; }
+    h2 { font-size: 13pt; color: #1a2b4c; border-bottom: 1pt solid #1a2b4c; padding-bottom: 3pt; margin-top: 4pt; }
+    h3 { font-size: 10.5pt; color: #1a2b4c; margin: 12pt 0 4pt 0; }
+    .cover { text-align: center; padding-top: 6cm; }
+    .cover h1 { font-size: 26pt; }
+    .cover .subtitle { font-size: 12pt; color: #555555; margin-top: 6pt; }
+    .meta-table { margin: 24pt auto 0 auto; text-align: left; width: 80%; font-size: 9.5pt; }
+    .meta-table td { padding: 3pt 8pt; }
+    .meta-table td.label { color: #555555; width: 42%; }
+    table.data { width: 100%; margin: 6pt 0 14pt 0; font-size: 9pt; }
+    table.data th { background-color: #1a2b4c; color: white; padding: 5pt; text-align: left; }
+    table.data td { padding: 5pt; border-bottom: 0.5pt solid #cccccc; vertical-align: top; }
+    ul.plain { margin: 4pt 0 10pt 14pt; padding: 0; }
+    ul.plain li { margin-bottom: 4pt; }
+    .footer { font-size: 8pt; color: #777777; text-align: center; }
+    .disclaimer { font-size: 8pt; color: #777777; margin-top: 16pt; }
+    .fidelity-note { color: #b8860b; }
+</style>
+</head>
+<body>
+
+<div id="footer_content" class="footer">
+    Contract Summary &mdash; {{ source_filename }} &mdash; Page <pdf:pagenumber/> of <pdf:pagecount/>
+</div>
+
+<div class="cover">
+    <h1>Contract Summary</h1>
+    <div class="subtitle">{{ source_filename }}</div>
+    <div class="subtitle">Generated {{ generated_at }}{% if client_role %} for {{ client_role }}{% endif %}</div>
+    <table class="meta-table">
+        <tr><td class="label">Source SHA-256</td><td style="font-size:7pt;">{{ source_sha256 }}</td></tr>
+    </table>
+    <p class="disclaimer">This is a descriptive summary, not a risk review or legal advice. It does not rank
+    severity, does not certify enforceability, and is not a substitute for the applicable
+    Contract Skills review when a full risk assessment is needed.</p>
+</div>
+
+<h2>Snapshot</h2>
+<table class="data">
+    <tr><th style="width:30%">Field</th><th style="width:70%">Detail</th></tr>
+    <tr><td>Contract type</td><td>{{ summary.contract_type }}</td></tr>
+    <tr><td>Parties</td><td>{% for p in summary.parties %}{{ p.name }} ({{ p.role }}){% if not loop.last %}; {% endif %}{% else %}not stated{% endfor %}</td></tr>
+    <tr><td>Effective date</td><td>{{ summary.effective_date }}</td></tr>
+    <tr><td>Term / duration</td><td>{{ summary.term_duration }}</td></tr>
+    <tr><td>Governing law</td><td>{{ summary.governing_law }}</td></tr>
+    <tr><td>Dispute resolution</td><td>{{ summary.dispute_resolution }}</td></tr>
+    <tr><td>Key monetary value</td><td>{{ summary.key_monetary_value }}</td></tr>
+</table>
+
+<h2>Subject Matter and Purpose</h2>
+<p>{{ summary.subject_matter_summary }}</p>
+
+<h2>Key Obligations by Party</h2>
+{% for party_obligations in summary.obligations_by_party %}
+<h3>{{ party_obligations.party }}</h3>
+<ul class="plain">
+    {% for item in party_obligations.obligations %}<li>{{ item }}</li>{% endfor %}
+</ul>
+{% endfor %}
+
+<h2>Payment Terms</h2>
+<p>{{ summary.payment_terms }}</p>
+
+{% if summary.key_dates %}
+<h2>Key Dates and Milestones</h2>
+<table class="data">
+    <tr><th style="width:25%">Date</th><th style="width:75%">Description</th></tr>
+    {% for kd in summary.key_dates %}
+    <tr><td>{{ kd.date }}</td><td>{{ kd.description }}</td></tr>
+    {% endfor %}
+</table>
+{% endif %}
+
+<h2>Termination and Exit</h2>
+<p>{{ summary.termination_and_exit }}</p>
+
+<h2>Liability and Risk-Allocation Snapshot</h2>
+<p>{{ summary.liability_snapshot }}</p>
+
+{% if summary.ip_confidentiality_data %}
+<h2>IP, Confidentiality and Data</h2>
+<p>{{ summary.ip_confidentiality_data }}</p>
+{% endif %}
+
+{% if summary.notable_or_unusual_terms %}
+<h2>Notable or Unusual Terms</h2>
+<ul class="plain">
+    {% for item in summary.notable_or_unusual_terms %}<li>{{ item }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+{% if summary.missing_information %}
+<h2>Missing Information</h2>
+<ul class="plain">
+    {% for item in summary.missing_information %}<li>{{ item }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+{% if fidelity_issues %}
+<h2>Data Fidelity Notices</h2>
+<ul class="plain fidelity-note">
+    {% for issue in fidelity_issues %}<li>{{ issue }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+</body>
+</html>
