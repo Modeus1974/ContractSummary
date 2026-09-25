@@ -141,10 +141,27 @@ h1 {
 
 .process-steps li {
     margin-bottom: 8px;
+    padding: 4px 4px 4px 8px;
+    border-left: 3px solid transparent;
+    border-radius: 3px;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .process-steps li strong {
     color: #1a2b4c;
+}
+
+.process-steps li.active {
+    background-color: #eef1f7;
+    border-left-color: #1a2b4c;
+}
+
+.process-steps li.done {
+    color: #2e7d32;
+}
+
+.process-steps li.done strong {
+    color: #2e7d32;
 }
 
 /* Report display */

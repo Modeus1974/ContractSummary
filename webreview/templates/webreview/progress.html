@@ -17,16 +17,44 @@
 <div class="process-steps">
     <h2 class="process-steps-title">How this works</h2>
     <ol>
-        <li><strong>Reading the document.</strong> The PDF or Word file is converted into plain text.</li>
-        <li><strong>Understanding the contract.</strong> A language model reads the full text and identifies the parties, key dates, payment terms, and obligations.</li>
-        <li><strong>Structuring the summary.</strong> Those findings are organised into a fixed set of sections: snapshot, parties and obligations, payment terms, key dates, and termination.</li>
-        <li><strong>Checking the facts.</strong> Every monetary figure and date the model extracted is checked against the original text. Anything that cannot be matched is flagged rather than assumed correct.</li>
+        <li data-stage="extracting"><strong>Reading the document.</strong> The PDF or Word file is converted into plain text.</li>
+        <li data-stage="summarizing"><strong>Understanding the contract.</strong> A language model reads the full text and identifies the parties, key dates, payment terms, and obligations.</li>
+        <li data-stage="summarizing"><strong>Structuring the summary.</strong> Those findings are organised into a fixed set of sections: snapshot, parties and obligations, payment terms, key dates, and termination.</li>
+        <li data-stage="summarizing"><strong>Checking the facts.</strong> Every monetary figure and date the model extracted is checked against the original text. Anything that cannot be matched is flagged rather than assumed correct.</li>
     </ol>
 </div>
 
 <script>
 const statusUrl = "{{ status_url }}";
 const reportUrl = "{{ report_url }}";
+
+// Maps the human-readable current_stage_label back to the on_stage() key
+// (contract_reviewer/summarize.py) each process-steps <li> is tagged with, so highlighting
+// only ever claims what the backend actually reports -- two real stages, not four. The
+// three "summarizing" steps highlight together as a group, since they happen inside one
+// LLM call with no separate signal for which of the three is running at a given moment.
+const STAGE_LABEL_TO_KEY = {
+    "Reading document": "extracting",
+    "Summarising": "summarizing",
+};
+const STAGE_ORDER = ["extracting", "summarizing"];
+
+function updateStepHighlight(stageLabel, executionStatus) {
+    const steps = document.querySelectorAll(".process-steps li[data-stage]");
+    const currentKey = executionStatus === "succeeded" ? null : STAGE_LABEL_TO_KEY[stageLabel];
+    const currentIndex = currentKey ? STAGE_ORDER.indexOf(currentKey) : -1;
+
+    steps.forEach((li) => {
+        const stepIndex = STAGE_ORDER.indexOf(li.dataset.stage);
+        li.classList.remove("active", "done");
+        if (executionStatus === "succeeded" || (currentIndex !== -1 && stepIndex < currentIndex)) {
+            li.classList.add("done");
+        } else if (stepIndex === currentIndex) {
+            li.classList.add("active");
+        }
+    });
+}
+updateStepHighlight(document.getElementById("stage-label").textContent, null);
 
 async function pollStatus() {
     try {
@@ -35,6 +63,7 @@ async function pollStatus() {
 
         document.getElementById("progress-bar-fill").style.width = data.progress_percent + "%";
         document.getElementById("stage-label").textContent = data.current_stage_label || "Starting...";
+        updateStepHighlight(data.current_stage_label, data.execution_status);
 
         const stallEl = document.getElementById("stall-warning");
         if (data.stalled) {
