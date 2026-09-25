@@ -123,6 +123,30 @@ h1 {
     font-size: 14px;
 }
 
+.process-steps {
+    margin-top: 28px;
+}
+
+.process-steps-title {
+    font-size: 16px;
+    color: #1a2b4c;
+    margin-bottom: 8px;
+}
+
+.process-steps ol {
+    padding-left: 20px;
+    color: #444444;
+    font-size: 14px;
+}
+
+.process-steps li {
+    margin-bottom: 8px;
+}
+
+.process-steps li strong {
+    color: #1a2b4c;
+}
+
 /* Report display */
 .report-header {
     display: flex;

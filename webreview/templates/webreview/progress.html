@@ -11,6 +11,19 @@
 <p id="stall-warning" class="stall-warning" style="display: none;"></p>
 <p id="error-message" class="field-error" style="display: none;"></p>
 
+<!-- Describes the summariser's own steps (contract_reviewer/summarize.py). If a review
+     pipeline is ever reinstated on this shared template, this section needs its own
+     context variable instead of being hardcoded here. -->
+<div class="process-steps">
+    <h2 class="process-steps-title">How this works</h2>
+    <ol>
+        <li><strong>Reading the document.</strong> The PDF or Word file is converted into plain text.</li>
+        <li><strong>Understanding the contract.</strong> A language model reads the full text and identifies the parties, key dates, payment terms, and obligations.</li>
+        <li><strong>Structuring the summary.</strong> Those findings are organised into a fixed set of sections: snapshot, parties and obligations, payment terms, key dates, and termination.</li>
+        <li><strong>Checking the facts.</strong> Every monetary figure and date the model extracted is checked against the original text. Anything that cannot be matched is flagged rather than assumed correct.</li>
+    </ol>
+</div>
+
 <script>
 const statusUrl = "{{ status_url }}";
 const reportUrl = "{{ report_url }}";
