@@ -205,6 +205,20 @@ each process), so it could never see a `qcluster` process's liveness from inside
 without configuring a shared cache backend. The plain heartbeat file avoids that entirely, at
 the cost of being custom rather than using the library's own mechanism.
 
+**(2026-09-25) Nav bar added; upload moved from `/` to `/summarise/`.** The site now has three
+sections, reachable from a nav bar in `base.html`: **Summarise** (the existing upload flow,
+now at `/summarise/`; `/` redirects there so old links still work), **Full Stack Development**
+(`/full-stack/`), and **Natural Language Processing** (`/nlp/`). The latter two are static
+educational pages (`webreview/content.py` holds the data, rendered by `full_stack.html`/
+`nlp.html`), written for teaching, not generated: Full Stack Development maps every real layer
+this app has (frontend, Django, `contract_reviewer`'s domain logic, the Claude/LangChain call,
+SQLite, `django-q2`, deployment config, logging) to its actual files, and Natural Language
+Processing walks the four real steps `summarize.py` takes (text extraction, prompt
+construction with the untrusted-`<source_document>` framing, structured extraction by the
+language model, the deterministic fact-check), stating plainly what it deliberately does not
+do (no separate tokenisation/NER stage; one LLM call replaces all of that). Keep both pages
+accurate to the code they describe if either changes; they cite real file and function names.
+
 Three distinct kinds of work happen in this repo — don't confuse them:
 
 1. **Editing the specification files** (`Workflow/SKILL.md`, `Contract Skills/*.md`, the
@@ -339,6 +353,7 @@ separate long-running process.
 | `run_dev.py` | Starts `runserver` + `qcluster_local` together (recommended way to start the web app locally); see the process-hygiene notes above for the two bugs fixed while building it. |
 | `webreview/worker_health.py` | Heartbeat-file check for the qcluster auto-recovery feature (see the 2026-09-25 dated entry above). `ensure_worker_running()` is called from `upload_view`; dev-only, gated on `DEBUG`. |
 | `webreview/management/commands/qcluster_local.py` | Local-dev `qcluster` wrapper that also writes the heartbeat file `worker_health.py` reads. Not used in production; PythonAnywhere's Always-on task runs plain `manage.py qcluster`. |
+| `webreview/content.py` | Static content (as Python data, not prose baked into templates) for the Full Stack Development and Natural Language Processing pages. Keep it accurate to the file/function names it cites if the underlying code changes. |
 | `Workflow/SKILL.md` | The orchestration spec — routing, roles, model tiers, verification rules, report structure. Loaded verbatim into prompts by `contract_reviewer/skills.py`; do not paraphrase its rules into code without checking the source. |
 | `Contract Skills/*.md` | Skill files, loaded verbatim by `contract_reviewer/skills.py`. Frontmatter `kind: contract-type` (the four review skills: Sales/Purchase, Tenancy, Employment, General fallback) marks a skill the risk-review classifier can route to (`skills.load_routing_skills()`); `kind: task` (`Contract Summary.md`) marks a different job entirely, never shown to that classifier — it's driven directly by `contract_reviewer/summarize.py` instead (both `summarise.py` and the web app's "Summarise" button). Adding a new skill file to this folder without a `kind: task` frontmatter field defaults it to `contract-type` and puts it in front of the classifier. |
 | `Contracts Database/Contracts Database Plan.md` | The proposed Phase 2 SQLite schema — see `ARCHITECTURE.md` §6 for how current state maps onto it. |
