@@ -33,8 +33,9 @@ body {
 }
 
 .site-nav a {
-    color: #c3ccdc;
+    color: #eef1f8;
     font-size: 14px;
+    font-weight: 600;
     text-decoration: none;
     padding-bottom: 2px;
     border-bottom: 2px solid transparent;
