@@ -74,7 +74,7 @@ def main() -> int:
 
     processes = [
         subprocess.Popen([PYTHON, "manage.py", "runserver", f"{HOST}:{port}", "--noreload"], cwd=PROJECT_ROOT),
-        subprocess.Popen([PYTHON, "manage.py", "qcluster"], cwd=PROJECT_ROOT),
+        subprocess.Popen([PYTHON, "manage.py", "qcluster_local"], cwd=PROJECT_ROOT),
     ]
 
     try:

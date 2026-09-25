@@ -2,6 +2,36 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Owner and house rules (read first)
+
+Owner: Chris (Christopher Ng Wai Chung). Singapore-based investment trainer, adjunct law
+lecturer at Temasek Polytechnic, admitted to the Singapore Bar (2018), CFA, former IT
+governance and infrastructure professional. He is the legal domain expert on this project:
+defer to him on the legal substance in `Workflow/SKILL.md` and `Contract Skills/*.md`, and
+flag (don't silently change) anything in those files that looks legally wrong.
+
+Reference files in `claude-context/` (copied from his personal setup; edit them there):
+
+- @claude-context/profile-and-voice.md: bio, working style, brand voice.
+- @claude-context/ANTI-AI-STYLE.md: pre-output filter for all prose. No em dashes.
+- @claude-context/pragmatic-programmer-refactor-guide.md: rules for any code change.
+- @claude-context/design.md: Tree of Prosperity visual brand.
+
+If `@` imports don't expand in a session, read the relevant file before starting.
+
+How they apply to this repo:
+
+| Work | Apply | Notes |
+|---|---|---|
+| Replies to Chris, commit messages, new doc text | Voice + ANTI-AI-STYLE | Conclusion first, then reasoning. State assumptions. No em dashes in new text. Don't mass-rewrite existing docs (`ARCHITECTURE.md`, `Specifications.md`, this file) just to remove em dashes; that is churn. |
+| User-facing web copy (`webreview/templates/`) and generated summary prose | Voice + ANTI-AI-STYLE, legal-writing rules | Changing what the summariser writes means changing `Contract Skills/Contract Summary.md` or `prompts.py`: ask Chris first, since those are runtime instructions. |
+| Code changes | Refactor guide | Behaviour must not change in a refactor. There is no pytest suite, so write a characterisation check in `tests/` before refactoring untested code. Adding pytest or any new dependency is a separate decision: ask first. Never mix refactor and behaviour change in one commit. |
+| Web UI and PDF styling | `design.md` | The live UI does not use the brand yet: `report.css` and the PDF Jinja templates use a navy `#1a2b4c` / Helvetica scheme. Don't restyle unless asked. If restyling, change `report.css` and `summary.pdf.html.jinja` together (they are meant to match), and note that xhtml2pdf cannot fetch Google Fonts: Fraunces/Inter need local TTFs via `@font-face`. |
+| Explaining code or errors | Profile working style | Plain English, runnable commands, say what the error means and the immediate fix. |
+
+Not relevant here (they live in his personal setup, not this repo): the StocksCafe trade-import
+workflow and the Obsidian Second Brain vault.
+
 ## Project state
 
 **Phase 1 (current): a working Python CLI.** `review.py` runs the full `Workflow/SKILL.md`
@@ -141,6 +171,40 @@ get there:
   the local test run found — confirming the deployed app, not just the local one, produces
   correct output against real content.
 
+**(2026-09-25) qcluster auto-recovery for local dev, plus a real process-kill mistake worth
+recording.** The "qcluster isn't running" incident (documented above) recurred a third time
+today: four stray `runserver` processes were running with no `qcluster` at all, leaving a
+`Summary` stuck at `pending`. While cleaning up the stray processes, PowerShell's default
+table formatting truncated a `CommandLine` column mid-string ("...manage.py..."), and a
+process that was actually the venv-stub half of a running `qcluster` (the same cosmetic quirk
+described above under `run_dev.py`) got killed by mistake, based on an assumption rather than
+a confirmed command line. Lesson: always confirm a full, untruncated command line
+(`Format-List`, or query by exact PID) before killing anything identified only by a truncated
+table column.
+
+The actual fix: `webreview/worker_health.py` plus a new `manage.py qcluster_local` command
+(`webreview/management/commands/qcluster_local.py`), wired into `upload_view`. `qcluster_local`
+is a thin wrapper around django-q2's own `qcluster` command that also writes a heartbeat file
+(`.runs/qcluster.heartbeat`) every 10 seconds from a background thread. `upload_view` checks
+that file's age before enqueuing a task: if it is missing or older than 25 seconds, it spawns
+`qcluster_local` as a detached process itself, guarded by a short-lived lock file
+(`.runs/qcluster_local.lock`) so two near-simultaneous uploads do not each spawn their own
+worker. Verified end to end through the real HTTP path: `runserver` alone, no `qcluster`, a
+real upload through curl, and the auto-spawned worker took the task all the way to `succeeded`
+with no manual intervention.
+
+Deliberately local-dev-only, gated on `settings.DEBUG`: in production, PythonAnywhere's
+Always-on task already restarts `qcluster` if it dies (see "Production deployment" below), so
+a second auto-spawn from inside a WSGI worker would just create a duplicate cluster.
+`run_dev.py` now starts `qcluster_local` instead of plain `qcluster`, so a normal local
+session always has a live heartbeat, and the auto-recovery only ever triggers for the genuine
+"someone forgot, or it crashed" case, not routine use. Checked django-q2's own source before
+building this: its built-in cluster-monitoring API (`Stat.get_all()`) stores heartbeats
+through Django's cache framework, which defaults to `LocMemCache` in this project (private to
+each process), so it could never see a `qcluster` process's liveness from inside `runserver`
+without configuring a shared cache backend. The plain heartbeat file avoids that entirely, at
+the cost of being custom rather than using the library's own mechanism.
+
 Three distinct kinds of work happen in this repo — don't confuse them:
 
 1. **Editing the specification files** (`Workflow/SKILL.md`, `Contract Skills/*.md`, the
@@ -180,7 +244,7 @@ py -3.11 -m venv .venv
 
 # ...or run them separately, if you specifically want to watch one process's log on its own:
 .\.venv\Scripts\python.exe manage.py runserver
-.\.venv\Scripts\python.exe manage.py qcluster
+.\.venv\Scripts\python.exe manage.py qcluster_local     # local dev: see "Auto-recovery" below. Plain `qcluster` still works, just without the heartbeat.
 
 # --- Contract summariser (separate program, not part of the risk-review pipeline) ---
 .\.venv\Scripts\python.exe summarise.py "<contract.pdf|.docx|.md>" [--client-role ...] [--tier balanced] [-v]
@@ -272,7 +336,9 @@ separate long-running process.
 | `webconfig/` | Django project settings/URLs (SQLite, `django_q` ORM broker config, media settings). |
 | `webreview/` | The Django app. Only summary-only code paths remain in `views.py`/`urls.py`/`tasks.py` (`run_summary_task` calls `contract_reviewer.summarize`) since 2026-09-23. `models.py` still defines `Contract`/`ContractDocument`/`Summary` (live) plus `Review`/`Finding`/`Authority`/`VerificationRecord`/`RunEvent` (dormant — no views/URLs reference them, kept for the one historical review row and to make a future web review UI additive rather than a rebuild). |
 | `manage.py`, `db.sqlite3`, `media/`, `logs/` | Django entrypoint, dev database, uploaded contracts + generated PDFs, rotating app log (`logs/webreview.log`) — all local-disk, gitignored. |
-| `run_dev.py` | Starts `runserver` + `qcluster` together (recommended way to start the web app locally); see the process-hygiene notes above for the two bugs fixed while building it. |
+| `run_dev.py` | Starts `runserver` + `qcluster_local` together (recommended way to start the web app locally); see the process-hygiene notes above for the two bugs fixed while building it. |
+| `webreview/worker_health.py` | Heartbeat-file check for the qcluster auto-recovery feature (see the 2026-09-25 dated entry above). `ensure_worker_running()` is called from `upload_view`; dev-only, gated on `DEBUG`. |
+| `webreview/management/commands/qcluster_local.py` | Local-dev `qcluster` wrapper that also writes the heartbeat file `worker_health.py` reads. Not used in production; PythonAnywhere's Always-on task runs plain `manage.py qcluster`. |
 | `Workflow/SKILL.md` | The orchestration spec — routing, roles, model tiers, verification rules, report structure. Loaded verbatim into prompts by `contract_reviewer/skills.py`; do not paraphrase its rules into code without checking the source. |
 | `Contract Skills/*.md` | Skill files, loaded verbatim by `contract_reviewer/skills.py`. Frontmatter `kind: contract-type` (the four review skills: Sales/Purchase, Tenancy, Employment, General fallback) marks a skill the risk-review classifier can route to (`skills.load_routing_skills()`); `kind: task` (`Contract Summary.md`) marks a different job entirely, never shown to that classifier — it's driven directly by `contract_reviewer/summarize.py` instead (both `summarise.py` and the web app's "Summarise" button). Adding a new skill file to this folder without a `kind: task` frontmatter field defaults it to `contract-type` and puts it in front of the classifier. |
 | `Contracts Database/Contracts Database Plan.md` | The proposed Phase 2 SQLite schema — see `ARCHITECTURE.md` §6 for how current state maps onto it. |

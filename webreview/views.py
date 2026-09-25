@@ -9,7 +9,7 @@ from django.urls import reverse
 from django_q.tasks import async_task
 
 from contract_reviewer import io_utils
-from webreview import stall
+from webreview import stall, worker_health
 from webreview.forms import ContractUploadForm
 from webreview.models import Contract, ContractDocument, Summary
 
@@ -44,6 +44,8 @@ def upload_view(request):
                 file_hash_sha256=_hash_uploaded_file(uploaded),
             )
             logger.info("Upload received: contract=%s document=%s (%s bytes)", contract.id, document.id, uploaded.size)
+
+            worker_health.ensure_worker_running()
 
             summary_run = Summary.objects.create(contract=contract, document=document, run_id=io_utils.new_run_id())
             async_task("webreview.tasks.run_summary_task", summary_run.id, timeout=600, ack_failure=True)
