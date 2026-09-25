@@ -9,7 +9,7 @@ from django.urls import reverse
 from django_q.tasks import async_task
 
 from contract_reviewer import io_utils
-from webreview import stall, worker_health
+from webreview import content, stall, worker_health
 from webreview.forms import ContractUploadForm
 from webreview.models import Contract, ContractDocument, Summary
 
@@ -54,6 +54,14 @@ def upload_view(request):
     else:
         form = ContractUploadForm()
     return render(request, "webreview/upload.html", {"form": form})
+
+
+def full_stack_view(request):
+    return render(request, "webreview/full_stack.html", {"layers": content.FULL_STACK_LAYERS})
+
+
+def nlp_view(request):
+    return render(request, "webreview/nlp.html", {"steps": content.NLP_STEPS})
 
 
 def summary_progress_view(request, summary_id: int):

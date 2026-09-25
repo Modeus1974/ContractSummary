@@ -12,6 +12,11 @@ body {
 .site-header {
     background-color: #1a2b4c;
     padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 24px;
 }
 
 .site-title {
@@ -19,6 +24,29 @@ body {
     font-size: 18px;
     font-weight: bold;
     text-decoration: none;
+}
+
+.site-nav {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.site-nav a {
+    color: #c3ccdc;
+    font-size: 14px;
+    text-decoration: none;
+    padding-bottom: 2px;
+    border-bottom: 2px solid transparent;
+}
+
+.site-nav a:hover {
+    color: white;
+}
+
+.site-nav a.active {
+    color: white;
+    border-bottom-color: white;
 }
 
 .site-main {

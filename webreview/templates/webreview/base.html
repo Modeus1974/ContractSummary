@@ -9,7 +9,12 @@
 </head>
 <body>
     <header class="site-header">
-        <a href="{% url 'webreview:upload' %}" class="site-title">Contract Reviewer</a>
+        <a href="{% url 'webreview:summarise' %}" class="site-title">Contract Reviewer</a>
+        <nav class="site-nav">
+            <a href="{% url 'webreview:full_stack' %}" class="{% if request.resolver_match.url_name == 'full_stack' %}active{% endif %}">Full Stack Development</a>
+            <a href="{% url 'webreview:nlp' %}" class="{% if request.resolver_match.url_name == 'nlp' %}active{% endif %}">Natural Language Processing</a>
+            <a href="{% url 'webreview:summarise' %}" class="{% if request.resolver_match.url_name == 'summarise' %}active{% endif %}">Summarise</a>
+        </nav>
     </header>
     <main class="site-main">
         {% block content %}{% endblock %}

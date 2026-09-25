@@ -1,0 +1,42 @@
+{% extends "webreview/base.html" %}
+{% block title %}Natural Language Processing{% endblock %}
+{% block content %}
+<h1>Natural Language Processing</h1>
+<p class="subtitle">By the end of this page, you should be able to explain, step by step, how
+a contract file becomes a structured summary, and why the last step exists.</p>
+
+<div class="report-body">
+    <p><strong>A common mistake</strong> is to assume "NLP" here means tokenisation,
+    part-of-speech tagging, or named-entity recognition, run as separate steps. This program
+    does not do that. A large language model performs reading comprehension and structured
+    extraction in a single call. The separate, deterministic step below is not language
+    understanding at all; it is a fact check.</p>
+
+    {% for row in steps %}
+    <h2>{{ forloop.counter }}. {{ row.step }}</h2>
+    <table>
+        <tbody>
+            <tr>
+                <td style="width: 160px;"><strong>What happens</strong></td>
+                <td>{{ row.what_happens }}</td>
+            </tr>
+            <tr>
+                <td><strong>Why it matters</strong></td>
+                <td>{{ row.why_it_matters }}</td>
+            </tr>
+            <tr>
+                <td><strong>Code</strong></td>
+                <td><code>{{ row.code_reference }}</code></td>
+            </tr>
+        </tbody>
+    </table>
+    {% endfor %}
+
+    <h2>What this program does not do</h2>
+    <p>Classical NLP techniques such as tokenisation, stemming, or named-entity recognition,
+    run as separate pipeline stages. A single large language model call replaces all of them.
+    The trade-off: fast to build, and accurate most of the time, but only as verifiable as
+    step 4 makes it. Nothing here proves the model's understanding was correct beyond the
+    handful of concrete figures step 4 can actually check.</p>
+</div>
+{% endblock %}

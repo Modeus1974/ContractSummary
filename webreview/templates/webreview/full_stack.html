@@ -1,0 +1,35 @@
+{% extends "webreview/base.html" %}
+{% block title %}Full Stack Development{% endblock %}
+{% block content %}
+<h1>Full Stack Development</h1>
+<p class="subtitle">By the end of this page, you should be able to point at any file in this
+repository and say which layer of the stack it belongs to, and why that separation matters.</p>
+
+<div class="report-body">
+    <p>"Full stack" usually means three things: something the user sees (frontend), something
+    that runs the business logic (backend), and something that stores data (database). A real
+    deployed application, this one included, has more layers than that. The table below maps
+    every layer this app actually has to the real files that implement it.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Layer</th>
+                <th>Technology</th>
+                <th>Files in this repo</th>
+                <th>What it does here</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in layers %}
+            <tr>
+                <td><strong>{{ row.layer }}</strong></td>
+                <td>{{ row.technology }}</td>
+                <td><code>{{ row.files }}</code></td>
+                <td>{{ row.description }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
